@@ -25,7 +25,7 @@ This repository provides a complete, production-ready solution for fine-tuning l
 
 ### Why This Matters
 
-- **Cost Savings:** 85-95% cheaper than OpenAI fine-tuning
+- **Cost Savings:** 85-95% cheaper fine-tuning
 - **Performance:** Optimized 2.11× speedup through comprehensive benchmarking
 - **Offline Capability:** Complete air-gapped deployment support
 - **Scalability:** Multi-GPU distributed training across 4 nodes
