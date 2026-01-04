@@ -1,0 +1,44 @@
+---
+# PVC for model storage (shared across pods)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llm-models-pvc
+  namespace: llm-training
+spec:
+  accessModes:
+    - ReadWriteMany  # Multiple pods can read
+  resources:
+    requests:
+      storage: 50Gi  # Mistral-7B ~14GB + overhead
+  storageClassName: oci-fss  # OCI File Storage Service (NFS-compatible)
+
+---
+# PVC for shared data (datasets, results)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llm-data-pvc
+  namespace: llm-training
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi  # Data, logs, checkpoints
+  storageClassName: oci-fss
+
+---
+# Optional: PVC for logs (can use same as data)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: llm-logs-pvc
+  namespace: llm-training
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: oci-fss

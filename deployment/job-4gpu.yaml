@@ -1,0 +1,152 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: llm-training-4gpu
+  namespace: llm-training
+  labels:
+    app: llm-training
+    experiment: baseline-4gpu
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: llm-training
+        experiment: baseline-4gpu
+    spec:
+      restartPolicy: Never
+
+      # Node selector for GPU nodes
+      nodeSelector:
+        node.kubernetes.io/instance-type: GPU.A10.4  # Adjust for your OKE GPU node shape with 4 GPUs
+
+      # Tolerations for GPU nodes
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+
+      # Init container to verify setup
+      initContainers:
+      - name: verify-setup
+        image: llm-training:latest  # Replace with your registry
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            echo "Verifying GPU access..."
+            nvidia-smi
+            echo "Number of GPUs: $(nvidia-smi --list-gpus | wc -l)"
+            echo "Verifying model files..."
+            ls -lh /models/
+            echo "Verifying shared data..."
+            ls -lh /shared-data/
+            echo "Setup verification complete!"
+        resources:
+          limits:
+            nvidia.com/gpu: 4
+        volumeMounts:
+        - name: models
+          mountPath: /models
+        - name: shared-data
+          mountPath: /shared-data
+        envFrom:
+        - configMapRef:
+            name: llm-training-config
+
+      containers:
+      - name: trainer
+        image: llm-training:latest  # Replace with your registry/image
+        imagePullPolicy: IfNotPresent
+
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            set -e
+            cd /workspace
+
+            echo "Starting 4-GPU training with Accelerate..."
+            echo "Config: configs/baseline_4gpu.yaml"
+
+            # Generate dataset if not exists
+            if [ ! -f /shared-data/data/synthetic_instructions.jsonl ]; then
+              echo "Generating synthetic dataset..."
+              python scripts/generate_dataset.py \
+                --output /shared-data/data/synthetic_instructions.jsonl \
+                --num_samples 10000 \
+                --seed 42
+            fi
+
+            # Copy configs to use shared data paths
+            sed 's|data/synthetic_instructions.jsonl|/shared-data/data/synthetic_instructions.jsonl|g' \
+                configs/baseline_4gpu.yaml > /tmp/baseline_4gpu.yaml
+
+            # Update output paths to shared storage
+            sed -i 's|results/|/shared-data/results/|g' /tmp/baseline_4gpu.yaml
+            sed -i 's|logs/|/shared-data/logs/|g' /tmp/baseline_4gpu.yaml
+
+            # Verify GPU count
+            GPU_COUNT=$(nvidia-smi --list-gpus | wc -l)
+            echo "Detected ${GPU_COUNT} GPUs"
+
+            if [ ${GPU_COUNT} -ne 4 ]; then
+              echo "ERROR: Expected 4 GPUs, found ${GPU_COUNT}"
+              exit 1
+            fi
+
+            # Run training with Accelerate
+            accelerate launch \
+              --config_file configs/accelerate_4gpu.yaml \
+              --num_processes 4 \
+              --num_machines 1 \
+              --mixed_precision bf16 \
+              --multi_gpu \
+              scripts/train_qlora.py \
+              --config /tmp/baseline_4gpu.yaml
+
+            echo "Training complete!"
+            echo "Results saved to /shared-data/results/checkpoints/baseline_4gpu"
+
+        resources:
+          requests:
+            memory: "128Gi"
+            cpu: "32"
+            nvidia.com/gpu: 4
+          limits:
+            memory: "192Gi"
+            cpu: "48"
+            nvidia.com/gpu: 4
+
+        volumeMounts:
+        - name: models
+          mountPath: /models
+          readOnly: true
+        - name: shared-data
+          mountPath: /shared-data
+        - name: dshm
+          mountPath: /dev/shm
+
+        envFrom:
+        - configMapRef:
+            name: llm-training-config
+
+        env:
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0,1,2,3"
+        - name: NCCL_DEBUG
+          value: "INFO"
+        - name: NCCL_SOCKET_IFNAME
+          value: "eth0"
+        - name: NCCL_IB_DISABLE
+          value: "1"
+
+      volumes:
+      - name: models
+        persistentVolumeClaim:
+          claimName: llm-models-pvc
+      - name: shared-data
+        persistentVolumeClaim:
+          claimName: llm-data-pvc
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 32Gi  # Larger for 4 GPUs

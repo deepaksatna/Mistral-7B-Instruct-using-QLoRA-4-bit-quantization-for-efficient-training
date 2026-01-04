@@ -1,0 +1,131 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: llm-training-1gpu
+  namespace: llm-training
+  labels:
+    app: llm-training
+    experiment: baseline-1gpu
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: llm-training
+        experiment: baseline-1gpu
+    spec:
+      restartPolicy: Never
+
+      # Node selector for GPU nodes
+      nodeSelector:
+        node.kubernetes.io/instance-type: GPU.A10.1  # Adjust for your OKE GPU node shape
+
+      # Tolerations for GPU nodes (if needed)
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+
+      # Init container to verify setup
+      initContainers:
+      - name: verify-setup
+        image: llm-training:latest  # Replace with your registry
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            echo "Verifying GPU access..."
+            nvidia-smi
+            echo "Verifying model files..."
+            ls -lh /models/
+            echo "Verifying shared data..."
+            ls -lh /shared-data/
+            echo "Setup verification complete!"
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+        volumeMounts:
+        - name: models
+          mountPath: /models
+        - name: shared-data
+          mountPath: /shared-data
+        envFrom:
+        - configMapRef:
+            name: llm-training-config
+
+      containers:
+      - name: trainer
+        image: llm-training:latest  # Replace with your registry/image
+        imagePullPolicy: IfNotPresent
+
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            set -e
+            cd /workspace
+
+            echo "Starting 1-GPU training..."
+            echo "Config: configs/baseline_1gpu.yaml"
+
+            # Generate dataset if not exists
+            if [ ! -f /shared-data/data/synthetic_instructions.jsonl ]; then
+              echo "Generating synthetic dataset..."
+              python scripts/generate_dataset.py \
+                --output /shared-data/data/synthetic_instructions.jsonl \
+                --num_samples 10000 \
+                --seed 42
+            fi
+
+            # Copy config to use shared data path
+            sed 's|data/synthetic_instructions.jsonl|/shared-data/data/synthetic_instructions.jsonl|g' \
+                configs/baseline_1gpu.yaml > /tmp/baseline_1gpu.yaml
+
+            # Update output paths to shared storage
+            sed -i 's|results/|/shared-data/results/|g' /tmp/baseline_1gpu.yaml
+            sed -i 's|logs/|/shared-data/logs/|g' /tmp/baseline_1gpu.yaml
+
+            # Run training
+            python scripts/train_qlora.py --config /tmp/baseline_1gpu.yaml
+
+            echo "Training complete!"
+            echo "Results saved to /shared-data/results/checkpoints/baseline_1gpu"
+
+        resources:
+          requests:
+            memory: "32Gi"
+            cpu: "8"
+            nvidia.com/gpu: 1
+          limits:
+            memory: "48Gi"
+            cpu: "12"
+            nvidia.com/gpu: 1
+
+        volumeMounts:
+        - name: models
+          mountPath: /models
+          readOnly: true
+        - name: shared-data
+          mountPath: /shared-data
+        - name: dshm
+          mountPath: /dev/shm
+
+        envFrom:
+        - configMapRef:
+            name: llm-training-config
+
+        env:
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        - name: NCCL_DEBUG
+          value: "INFO"
+
+      volumes:
+      - name: models
+        persistentVolumeClaim:
+          claimName: llm-models-pvc
+      - name: shared-data
+        persistentVolumeClaim:
+          claimName: llm-data-pvc
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 16Gi

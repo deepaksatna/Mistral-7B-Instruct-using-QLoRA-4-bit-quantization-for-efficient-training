@@ -1,0 +1,222 @@
+---
+# 4 Benchmark Pods - One per A10 GPU Node
+# Each pod is pinned to a specific node via node selector
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: benchmark-node-1
+  labels:
+    app: llm-benchmark
+    node-id: "1"
+spec:
+  restartPolicy: Never
+
+  nodeSelector:
+    gpu: A10
+    gpu-id: "1"
+
+  tolerations:
+  - key: nvidia.com/gpu
+    operator: Equal
+    value: present
+    effect: NoSchedule
+
+  imagePullSecrets:
+  - name: ocirsecret
+
+  containers:
+  - name: benchmark
+    image: fra.ocir.io/frntrd2vyxvi/models:mistraltraining-v1.0
+    imagePullPolicy: Always
+
+    command: ["/bin/bash"]
+    args: ["-c", "echo 'Benchmark pod ready on node 1' && sleep infinity"]
+
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+        memory: "64Gi"
+      requests:
+        nvidia.com/gpu: 1
+        memory: "32Gi"
+        cpu: "8"
+
+    volumeMounts:
+    - name: results
+      mountPath: /results
+
+    env:
+    - name: NVIDIA_VISIBLE_DEVICES
+      value: "all"
+    - name: NODE_ID
+      value: "1"
+
+  volumes:
+  - name: results
+    emptyDir: {}
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: benchmark-node-2
+  labels:
+    app: llm-benchmark
+    node-id: "2"
+spec:
+  restartPolicy: Never
+
+  nodeSelector:
+    gpu: A10
+    gpu-id: "2"
+
+  tolerations:
+  - key: nvidia.com/gpu
+    operator: Equal
+    value: present
+    effect: NoSchedule
+
+  imagePullSecrets:
+  - name: ocirsecret
+
+  containers:
+  - name: benchmark
+    image: fra.ocir.io/frntrd2vyxvi/models:mistraltraining-v1.0
+    imagePullPolicy: Always
+
+    command: ["/bin/bash"]
+    args: ["-c", "echo 'Benchmark pod ready on node 2' && sleep infinity"]
+
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+        memory: "64Gi"
+      requests:
+        nvidia.com/gpu: 1
+        memory: "32Gi"
+        cpu: "8"
+
+    volumeMounts:
+    - name: results
+      mountPath: /results
+
+    env:
+    - name: NVIDIA_VISIBLE_DEVICES
+      value: "all"
+    - name: NODE_ID
+      value: "2"
+
+  volumes:
+  - name: results
+    emptyDir: {}
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: benchmark-node-3
+  labels:
+    app: llm-benchmark
+    node-id: "3"
+spec:
+  restartPolicy: Never
+
+  nodeSelector:
+    gpu: A10
+    gpu-id: "3"
+
+  tolerations:
+  - key: nvidia.com/gpu
+    operator: Equal
+    value: present
+    effect: NoSchedule
+
+  imagePullSecrets:
+  - name: ocirsecret
+
+  containers:
+  - name: benchmark
+    image: fra.ocir.io/frntrd2vyxvi/models:mistraltraining-v1.0
+    imagePullPolicy: Always
+
+    command: ["/bin/bash"]
+    args: ["-c", "echo 'Benchmark pod ready on node 3' && sleep infinity"]
+
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+        memory: "64Gi"
+      requests:
+        nvidia.com/gpu: 1
+        memory: "32Gi"
+        cpu: "8"
+
+    volumeMounts:
+    - name: results
+      mountPath: /results
+
+    env:
+    - name: NVIDIA_VISIBLE_DEVICES
+      value: "all"
+    - name: NODE_ID
+      value: "3"
+
+  volumes:
+  - name: results
+    emptyDir: {}
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: benchmark-node-4
+  labels:
+    app: llm-benchmark
+    node-id: "4"
+spec:
+  restartPolicy: Never
+
+  nodeSelector:
+    gpu: A10
+    gpu-id: "0"
+
+  tolerations:
+  - key: nvidia.com/gpu
+    operator: Equal
+    value: present
+    effect: NoSchedule
+
+  imagePullSecrets:
+  - name: ocirsecret
+
+  containers:
+  - name: benchmark
+    image: fra.ocir.io/frntrd2vyxvi/models:mistraltraining-v1.0
+    imagePullPolicy: Always
+
+    command: ["/bin/bash"]
+    args: ["-c", "echo 'Benchmark pod ready on node 4' && sleep infinity"]
+
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+        memory: "64Gi"
+      requests:
+        nvidia.com/gpu: 1
+        memory: "32Gi"
+        cpu: "8"
+
+    volumeMounts:
+    - name: results
+      mountPath: /results
+
+    env:
+    - name: NVIDIA_VISIBLE_DEVICES
+      value: "all"
+    - name: NODE_ID
+      value: "4"
+
+  volumes:
+  - name: results
+    emptyDir: {}

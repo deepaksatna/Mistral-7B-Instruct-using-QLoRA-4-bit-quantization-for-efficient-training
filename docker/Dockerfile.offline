@@ -1,0 +1,99 @@
+# Dockerfile for TRUE offline installation (using pre-downloaded wheels)
+# Use this on offline systems after downloading all dependencies
+
+# Stage 1: Base image with CUDA and Python
+FROM nvidia/cuda:12.1.0-cudnn8-devel-ubuntu22.04 AS base
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV CUDA_HOME=/usr/local/cuda
+ENV PATH=${CUDA_HOME}/bin:${PATH}
+ENV LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3.10-dev \
+    python3-pip \
+    git \
+    wget \
+    curl \
+    build-essential \
+    cmake \
+    ninja-build \
+    libssl-dev \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create symlinks for python
+RUN ln -sf /usr/bin/python3.10 /usr/bin/python && \
+    ln -sf /usr/bin/python3.10 /usr/bin/python3
+
+# Upgrade pip
+RUN python -m pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Stage 2: Install Python dependencies from local wheels
+FROM base AS dependencies
+
+# Copy pre-downloaded wheels
+COPY offline/downloads/torch/ /tmp/torch-wheels/
+COPY offline/downloads/wheels/ /tmp/wheels/
+
+# Install PyTorch from local wheels (no internet needed)
+RUN pip install --no-index --find-links /tmp/torch-wheels/ \
+    torch torchvision torchaudio
+
+# Install other dependencies from local wheels (no internet needed)
+RUN pip install --no-index --find-links /tmp/wheels/ \
+    transformers accelerate peft bitsandbytes datasets \
+    sentencepiece protobuf wandb tensorboard \
+    numpy pandas scipy scikit-learn matplotlib seaborn \
+    pyyaml tqdm psutil pynvml gpustat \
+    requests urllib3 certifi charset-normalizer idna \
+    huggingface-hub safetensors tokenizers filelock regex \
+    ipython jupyter black flake8
+
+# Cleanup wheels to reduce image size
+RUN rm -rf /tmp/torch-wheels /tmp/wheels
+
+# Stage 3: Final image with application code
+FROM dependencies AS final
+
+# Set working directory
+WORKDIR /workspace
+
+# Copy application code
+COPY configs /workspace/configs
+COPY scripts /workspace/scripts
+COPY docs /workspace/docs
+COPY envs /workspace/envs
+COPY README.md /workspace/
+
+# Create necessary directories
+RUN mkdir -p /workspace/data \
+    /workspace/logs \
+    /workspace/results/metrics \
+    /workspace/results/checkpoints \
+    /workspace/results/plots \
+    /models \
+    /shared-data
+
+# Set environment variables for offline mode
+ENV HF_DATASETS_OFFLINE=1
+ENV TRANSFORMERS_OFFLINE=1
+ENV HF_HUB_OFFLINE=1
+ENV TRANSFORMERS_CACHE=/models
+ENV HF_HOME=/models
+ENV TORCH_HOME=/models
+
+# Make scripts executable
+RUN chmod +x /workspace/scripts/*.py
+
+# Verify installation
+RUN python -c "import torch; print(f'PyTorch: {torch.__version__}')" && \
+    python -c "import transformers; print(f'Transformers: {transformers.__version__}')" && \
+    python -c "import accelerate; print(f'Accelerate: {accelerate.__version__}')" && \
+    python -c "import peft; print(f'PEFT: {peft.__version__}')"
+
+# Default command
+CMD ["/bin/bash"]

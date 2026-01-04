@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llm-training-config
+  namespace: llm-training
+data:
+  # Environment variables for offline mode
+  HF_DATASETS_OFFLINE: "1"
+  TRANSFORMERS_OFFLINE: "1"
+  HF_HUB_OFFLINE: "1"
+  TRANSFORMERS_CACHE: "/models"
+  HF_HOME: "/models"
+  TORCH_HOME: "/models"
+
+  # OCI specific settings (if applicable)
+  OCI_RESOURCE_PRINCIPAL_VERSION: "2.2"
+
+  # Training settings
+  PYTHONUNBUFFERED: "1"
+  CUDA_VISIBLE_DEVICES: "0,1,2,3"
+
+  # Logging
+  LOG_LEVEL: "INFO"
+
+  # Wandb offline mode
+  WANDB_MODE: "offline"
+  WANDB_DIR: "/shared-data/wandb"
