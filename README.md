@@ -222,6 +222,20 @@ Comprehensive benchmarking identified optimal configurations for QLoRA fine-tuni
 
 ---
 
+### Distributed Training Results (4-node DDP)
+
+![Distributed Comprehensive Dashboard](images/11_Comprehensive_Dashboard.png)
+
+Key results (from comprehensive distributed benchmark):
+- Configuration: world size = 4 nodes, per-device batch size = 8, global batch size = 32, sequence length = 512, steps = 100
+- Throughput: 5.82 samples/sec (~2,980 tokens/sec)
+- Baseline (1 node): 1.46 samples/sec
+- Actual vs ideal scaling: 3.99× vs 4.00× (scaling efficiency: 99.7%), communication overhead ~0.3%
+- Time for 10K samples: ~28.6 minutes end-to-end at 4 nodes
+- Estimated total cost for 10K samples: ~$1.14 (4× A10 @ $0.60/hour)
+- Cost per 1K samples: ~$0.1146 (on par with single-node; primary benefit is wall-clock reduction)
+- Recommendation: Excellent near-linear scaling to 4 nodes—recommended for production fine‑tuning where time-to-result matters
+
 ## Detailed Documentation
 
 ### [1. Dockerfile Documentation](docs/DOCKERFILE.md)
